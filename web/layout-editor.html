@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Keyboard Layout Editor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app app-wide">
+    <header class="header">
+      <h1>Keyboard Layout Editor</h1>
+      <p class="subtitle">Pick a Mongolian character, then click a non-number key to swap its `base` value. Hold `Shift` while clicking a non-number key to swap its `shift` value.</p>
+      <div class="font-controls">
+        <label class="label font-label" for="font-select">Font</label>
+        <select id="font-select" class="font-select" aria-label="Choose Mongolian font">
+          <option value="">Loading fonts...</option>
+        </select>
+        <span class="font-status" id="font-status"></span>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="btn-save-layout">Save layout</button>
+        <button type="button" class="btn btn-secondary" id="btn-reload-layout">Reload from file</button>
+        <a class="btn btn-secondary link-button" href="/">Back to keyboard</a>
+      </div>
+      <p class="editor-status" id="editor-status">Loading keyboard layout…</p>
+    </header>
+
+    <section class="editor-section">
+      <label class="label">Selected character</label>
+      <div class="selected-char-panel" id="selected-char-panel">
+        <span class="selected-char-symbol" id="selected-char-symbol">None</span>
+        <span class="selected-char-meta" id="selected-char-meta">Choose a character below.</span>
+      </div>
+    </section>
+
+    <section class="editor-section">
+      <label class="label">Available characters <span class="label-hint">(used characters are marked; unassigned ones remain available to place)</span></label>
+      <div class="char-palette" id="char-palette"></div>
+    </section>
+
+    <section class="editor-section">
+      <label class="label">Keyboard layout <span class="label-hint">(number-row keys are locked; click a non-number key to assign `base`; hold `Shift` while clicking to assign `shift`)</span></label>
+      <div class="keyboard" id="layout-keyboard" role="group" aria-label="Editable Mongolian keyboard layout"></div>
+    </section>
+  </div>
+
+  <script src="tokens.js"></script>
+  <script src="layout-editor.js"></script>
+</body>
+</html>

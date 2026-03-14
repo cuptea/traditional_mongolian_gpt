@@ -1,0 +1,567 @@
+/* Traditional Mongolian Virtual Keyboard - Website */
+
+@font-face {
+  font-family: MongolianFont;
+  src: url("assets/font/z52chimegtig.otf") format("opentype");
+}
+
+:root {
+  --font-mongolian: MongolianFont, "Noto Sans Mongolian", sans-serif;
+  --bg: #1a1b26;
+  --surface: #24283b;
+  --text: #c0caf5;
+  --muted: #565f89;
+  --accent: #7aa2f7;
+  --key-bg: #414868;
+  --key-hover: #565f89;
+  --key-active: #7aa2f7;
+  --border: #3b4261;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.app-wide {
+  max-width: 1200px;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.font-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.font-label {
+  margin-bottom: 0;
+}
+
+.font-select {
+  min-width: 240px;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.font-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.2);
+}
+
+.font-status {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+.label-hint {
+  font-weight: 400;
+  color: var(--muted);
+  opacity: 0.9;
+}
+
+.input-section {
+  margin-bottom: 24px;
+}
+
+/* Vertical (top-down) display - same visual style as completion images; wide area for long text */
+.input-display {
+  font-family: var(--font-mongolian);
+  font-size: 28px;
+  writing-mode: vertical-lr;
+  text-orientation: sideways;
+  width: 100%;
+  height: 320px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  line-height: 1.4;
+  overflow: auto;
+  resize: none;
+}
+
+.input-display:empty::before,
+.input-placeholder {
+  color: var(--muted);
+}
+
+.input-text {
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.input-field {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: var(--font-mongolian);
+  font-size: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  resize: vertical;
+  min-height: 60px;
+}
+
+.input-field::placeholder {
+  color: var(--muted);
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.2);
+}
+
+/* Hidden textarea: only the vertical input display is shown; value still synced for keyboard/copy/suggest */
+.input-field-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.suggestions-wrap {
+  margin-top: 16px;
+}
+
+.suggestions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.suggestions-wrap .label {
+  margin-bottom: 0;
+}
+
+.btn-refresh {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.suggestions-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.btn-suggestion {
+  font-family: var(--font-mongolian);
+  font-size: 1rem;
+  padding: 8px 12px;
+  min-width: 2.5em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Pick one: show suggestion text with 90° clockwise rotation (vertical Mongolian style) */
+.suggestion-num {
+  flex-shrink: 0;
+  font-family: system-ui, sans-serif;
+}
+
+.suggestion-text {
+  display: inline-block;
+  writing-mode: vertical-rl;
+  text-orientation: sideways;
+  font-family: var(--font-mongolian);
+  max-height: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn {
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-secondary {
+  background: var(--key-bg);
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: var(--key-hover);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.keyboard-section {
+  margin-bottom: 24px;
+}
+
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.keyboard-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.key {
+  width: 64px;
+  height: 84px;
+  padding: 6px;
+  background: var(--key-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  transition: background 0.15s, transform 0.05s;
+  position: relative;
+}
+
+.key:hover {
+  background: var(--key-hover);
+}
+
+.key:active,
+.key-active {
+  background: var(--key-active);
+}
+
+.key-passive {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.key-passive:hover {
+  background: var(--key-bg);
+}
+
+.key-label {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.85;
+  text-transform: uppercase;
+}
+
+.key-content {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  flex: 1;
+}
+
+.key-entries {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+  flex: 1;
+}
+
+.key-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 20px;
+  align-self: stretch;
+}
+
+.key-entry-shift {
+  align-self: flex-end;
+}
+
+.key .key-char {
+  display: inline-block;
+  transform: rotate(90deg);
+  min-height: 18px;
+  font-family: var(--font-mongolian);
+  font-size: 18px;
+}
+
+.key .key-char-space {
+  position: relative;
+  min-width: 18px;
+}
+
+.key .key-char-space::after {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.45;
+  border-radius: 999px;
+}
+
+.key .key-token {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.key:active .key-char {
+  transform: rotate(90deg) scale(0.97);
+}
+
+.key-tab {
+  width: 92px;
+}
+
+.key-caps {
+  width: 108px;
+}
+
+.key-enter {
+  width: 112px;
+}
+
+.key-shift {
+  width: 132px;
+}
+
+.key-backspace {
+  width: 112px;
+}
+
+.key-space {
+  width: 100%;
+  max-width: 480px;
+}
+
+.key-space .key-content {
+  align-items: center;
+}
+
+.key-space .key-entries {
+  align-items: center;
+}
+
+.key-space .key-entry {
+  min-width: 120px;
+}
+
+.editor-section {
+  margin-bottom: 24px;
+}
+
+.editor-status {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.selected-char-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.selected-char-symbol {
+  min-width: 72px;
+  min-height: 72px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--key-bg);
+  font-family: var(--font-mongolian);
+  font-size: 28px;
+}
+
+.selected-char-meta {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.char-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.char-button {
+  width: 64px;
+  min-height: 72px;
+  padding: 8px 6px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--key-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.char-button:hover {
+  background: var(--key-hover);
+}
+
+.char-button-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.char-button-used {
+  border-color: rgba(122, 162, 247, 0.55);
+}
+
+.char-button-unused {
+  opacity: 0.72;
+}
+
+.char-button-symbol {
+  font-family: var(--font-mongolian);
+  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  text-align: center;
+  transform: rotate(90deg);
+}
+
+.char-button-space {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  transform: none;
+}
+
+.char-button-token {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.editor-key {
+  cursor: pointer;
+}
+
+.editor-key:hover {
+  box-shadow: 0 0 0 1px rgba(122, 162, 247, 0.35);
+}
+
+.footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.footer code {
+  background: var(--surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+}

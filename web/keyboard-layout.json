@@ -1,0 +1,341 @@
+{
+  "description": "Editable physical keyboard mapping for the Traditional Mongolian virtual keyboard. Update base/shift values to tune the layout.",
+  "rows": [
+    [
+      {
+        "base": "᠁",
+        "code": "Backquote",
+        "label": "`",
+        "shift": "ᡰ"
+      },
+      {
+        "base": "",
+        "code": "Digit1",
+        "label": "1",
+        "shift": ""
+      },
+      {
+        "base": "",
+        "code": "Digit2",
+        "label": "2",
+        "shift": ""
+      },
+      {
+        "base": "᠄",
+        "code": "Digit3",
+        "label": "3",
+        "shift": ""
+      },
+      {
+        "base": "᠅",
+        "code": "Digit4",
+        "label": "4",
+        "shift": ""
+      },
+      {
+        "base": "᠈",
+        "code": "Digit5",
+        "label": "5",
+        "shift": "ᡨ"
+      },
+      {
+        "base": "᠉",
+        "code": "Digit6",
+        "label": "6",
+        "shift": "ᡦ"
+      },
+      {
+        "base": "ᡐ",
+        "code": "Digit7",
+        "label": "7",
+        "shift": ""
+      },
+      {
+        "base": "ᡑ",
+        "code": "Digit8",
+        "label": "8",
+        "shift": ""
+      },
+      {
+        "base": "ᡒ",
+        "code": "Digit9",
+        "label": "9",
+        "shift": ""
+      },
+      {
+        "base": "ᡓ",
+        "code": "Digit0",
+        "label": "0",
+        "shift": ""
+      },
+      {
+        "base": "ᡘ",
+        "code": "Minus",
+        "label": "-",
+        "shift": ""
+      },
+      {
+        "base": "ᡛ",
+        "code": "Equal",
+        "label": "=",
+        "shift": ""
+      },
+      {
+        "code": "Backspace",
+        "label": "Backspace",
+        "widthClass": "key-backspace"
+      }
+    ],
+    [
+      {
+        "code": "Tab",
+        "label": "Tab",
+        "passive": true,
+        "widthClass": "key-tab"
+      },
+      {
+        "base": "ᢥ",
+        "code": "KeyQ",
+        "label": "Q",
+        "shift": ""
+      },
+      {
+        "base": "ᢟ",
+        "code": "KeyW",
+        "label": "W",
+        "shift": "ᢧ"
+      },
+      {
+        "base": "ᡧ",
+        "code": "KeyE",
+        "label": "E",
+        "shift": "ᢨ"
+      },
+      {
+        "base": "ᢞ",
+        "code": "KeyR",
+        "label": "R",
+        "shift": "ᢝ"
+      },
+      {
+        "base": "ᢘ",
+        "code": "KeyT",
+        "label": "T",
+        "shift": ""
+      },
+      {
+        "base": "ᢜ",
+        "code": "KeyY",
+        "label": "Y",
+        "shift": ""
+      },
+      {
+        "base": "ᡴ",
+        "code": "KeyU",
+        "label": "U",
+        "shift": ""
+      },
+      {
+        "base": "ᡬ",
+        "code": "KeyI",
+        "label": "I",
+        "shift": "ᡫ"
+      },
+      {
+        "base": "ᡭ",
+        "code": "KeyO",
+        "label": "O",
+        "shift": ""
+      },
+      {
+        "base": "ᡶ",
+        "code": "KeyP",
+        "label": "P",
+        "shift": "ᡷ"
+      },
+      {
+        "base": "ᢍ",
+        "code": "BracketLeft",
+        "label": "[",
+        "shift": ""
+      },
+      {
+        "base": "",
+        "code": "BracketRight",
+        "label": "]",
+        "shift": ""
+      },
+      {
+        "base": "",
+        "code": "Backslash",
+        "label": "\\",
+        "shift": ""
+      }
+    ],
+    [
+      {
+        "code": "CapsLock",
+        "label": "Caps",
+        "passive": true,
+        "widthClass": "key-caps"
+      },
+      {
+        "base": "ᡥ",
+        "code": "KeyA",
+        "label": "A",
+        "shift": "ᡪ"
+      },
+      {
+        "base": "ᢔ",
+        "code": "KeyS",
+        "label": "S",
+        "shift": "ᢓ"
+      },
+      {
+        "base": "ᢙ",
+        "code": "KeyD",
+        "label": "D",
+        "shift": ""
+      },
+      {
+        "base": "ᢡ",
+        "code": "KeyF",
+        "label": "F",
+        "shift": "ᢠ"
+      },
+      {
+        "base": "ᢈ",
+        "code": "KeyG",
+        "label": "G",
+        "shift": "ᢉ"
+      },
+      {
+        "base": "ᡸ",
+        "code": "KeyH",
+        "label": "H",
+        "shift": "ᢇ"
+      },
+      {
+        "base": "ᢛ",
+        "code": "KeyJ",
+        "label": "J",
+        "shift": ""
+      },
+      {
+        "base": "ᢤ",
+        "code": "KeyK",
+        "label": "K",
+        "shift": "ᢣ"
+      },
+      {
+        "base": "ᢏ",
+        "code": "KeyL",
+        "label": "L",
+        "shift": "ᢑ"
+      },
+      {
+        "base": "ᢋ",
+        "code": "Semicolon",
+        "label": ";",
+        "shift": "ᢐ"
+      },
+      {
+        "base": "ᢊ",
+        "code": "Quote",
+        "label": "'",
+        "shift": "ᡵ"
+      },
+      {
+        "base": "\n",
+        "code": "Enter",
+        "label": "Enter",
+        "shift": "\n",
+        "widthClass": "key-enter"
+      }
+    ],
+    [
+      {
+        "code": "ShiftLeft",
+        "label": "Shift",
+        "passive": true,
+        "widthClass": "key-shift"
+      },
+      {
+        "base": "ᢗ",
+        "code": "KeyZ",
+        "label": "Z",
+        "shift": "ᢖ"
+      },
+      {
+        "base": "ᢦ",
+        "code": "KeyX",
+        "label": "X",
+        "shift": ""
+      },
+      {
+        "base": "ᢚ",
+        "code": "KeyC",
+        "label": "C",
+        "shift": ""
+      },
+      {
+        "base": "ᢢ",
+        "code": "KeyV",
+        "label": "V",
+        "shift": ""
+      },
+      {
+        "base": "ᡳ",
+        "code": "KeyB",
+        "label": "B",
+        "shift": "ᡲ"
+      },
+      {
+        "base": "ᡯ",
+        "code": "KeyN",
+        "label": "N",
+        "shift": "ᡱ"
+      },
+      {
+        "base": "ᢌ",
+        "code": "KeyM",
+        "label": "M",
+        "shift": "ᢎ"
+      },
+      {
+        "base": "᠂",
+        "code": "Comma",
+        "label": ",",
+        "shift": ""
+      },
+      {
+        "base": "᠃",
+        "code": "Period",
+        "label": ".",
+        "shift": ""
+      },
+      {
+        "base": "ᢪ",
+        "code": "Slash",
+        "label": "/",
+        "shift": ""
+      },
+      {
+        "code": "ShiftRight",
+        "label": "Shift",
+        "passive": true,
+        "widthClass": "key-shift"
+      }
+    ],
+    [
+      {
+        "base": " ",
+        "code": "Space",
+        "label": "Space",
+        "shift": " ",
+        "widthClass": "key-space"
+      }
+    ]
+  ],
+  "version": 1
+}

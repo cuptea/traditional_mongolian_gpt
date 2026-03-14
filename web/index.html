@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traditional Mongolian Virtual Keyboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>Traditional Mongolian Virtual Keyboard</h1>
+      <p class="subtitle">Input Unicode from the project character set. Suggestions update automatically as the context changes.</p>
+      <div class="font-controls">
+        <label class="label font-label" for="font-select">Font</label>
+        <select id="font-select" class="font-select" aria-label="Choose Mongolian font">
+          <option value="">Loading fonts...</option>
+        </select>
+        <span class="font-status" id="font-status"></span>
+        <a class="btn btn-secondary link-button" href="/layout-editor.html">Edit keyboard layout</a>
+      </div>
+    </header>
+
+    <section class="input-section">
+      <label class="label">Current input <span class="label-hint">(top-down, same as completion preview)</span></label>
+      <div class="input-display" id="input-display" aria-live="polite">
+        <span class="input-placeholder" id="input-placeholder"> </span>
+        <span class="input-text" id="input-text"></span>
+      </div>
+      <textarea
+        class="input-field input-field-hidden"
+        id="input-field"
+        placeholder="Type or click keys below…"
+        rows="2"
+        aria-label="Mongolian text input (hidden)"
+      ></textarea>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" id="btn-backspace" title="Backspace">⌫ Backspace</button>
+        <button type="button" class="btn btn-secondary" id="btn-clear" title="Clear">Clear</button>
+        <button type="button" class="btn btn-primary" id="btn-copy" title="Copy to clipboard">Copy</button>
+        <button type="button" class="btn btn-secondary" id="btn-export-pdf" title="Export current text as PDF">Export PDF</button>
+      </div>
+      <div class="suggestions-wrap" id="suggestions-wrap">
+        <div class="suggestions-header">
+          <span class="label">Pick one:</span>
+          <button type="button" class="btn btn-secondary btn-refresh" id="btn-refresh-suggestions" title="Refresh suggestions">Refresh suggestions</button>
+        </div>
+        <div class="suggestions" id="suggestions" role="list"></div>
+        <p class="suggestions-hint" id="suggestions-hint"></p>
+      </div>
+    </section>
+
+    <section class="keyboard-section">
+      <label class="label">Character keys <span class="label-hint">(type directly with your physical keyboard; hold Shift for the second character shown on a key)</span></label>
+      <div class="keyboard" id="keyboard" role="group" aria-label="Mongolian character keyboard"></div>
+    </section>
+
+    <footer class="footer">
+      <p>Font: <span id="current-font-name">z52chimegtig</span>. Characters from <code>assets/token/new_char_to_token.json</code>.</p>
+    </footer>
+  </div>
+
+  <script src="tokens.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
