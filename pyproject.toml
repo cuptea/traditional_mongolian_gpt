@@ -30,6 +30,9 @@ classifiers = [
 dependencies = [
     "numpy<2",
     "torch>=1.9.0",
+    "transformers",
+    "tiktoken",
+    "pandas",
 ]
 
 [project.optional-dependencies]

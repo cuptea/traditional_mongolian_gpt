@@ -68,7 +68,7 @@ if [ -f "requirements.txt" ]; then
     echo "✓ Requirements installed"
 else
     echo "⚠ requirements.txt not found, installing basic dependencies..."
-    pip install torch jupyter ipykernel notebook Pillow ipython matplotlib --quiet
+    pip install torch transformers tiktoken pandas jupyter ipykernel notebook Pillow ipython matplotlib --quiet
 fi
 
 # Install Jupyter kernel for this virtual environment
