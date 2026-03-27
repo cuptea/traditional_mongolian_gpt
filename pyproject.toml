@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mongol-ml-autocomplete"
 version = "0.1.0"
-description = "A library for Mongolian text autocompletion using PyTorch models"
+description = "Mongolian text autocompletion (PyTorch) and optional Flask web keyboard"
 readme = "README.md"
 requires-python = ">=3.7"
 license = {text = "MIT"}
@@ -30,9 +30,6 @@ classifiers = [
 dependencies = [
     "numpy<2",
     "torch>=1.9.0",
-    "transformers",
-    "tiktoken",
-    "pandas",
 ]
 
 [project.optional-dependencies]
@@ -51,10 +48,3 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = "-v --tb=short"

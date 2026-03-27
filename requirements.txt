@@ -1,24 +1,2 @@
-# Core dependencies
-numpy<2
-torch>=1.9.0
-transformers
-tiktoken
-tokenizers
-pandas
-
-# Development dependencies
-pytest>=7.0.0
-pytest-cov>=4.0.0
-
-# Jupyter notebook dependencies
-jupyter>=1.0.0
-ipykernel>=6.0.0
-notebook>=6.4.0
-
-# Font and visualization dependencies (optional)
-matplotlib>=3.3.0
-Pillow>=8.0.0
-ipython>=7.0.0
-
-# Web app dependencies
-flask>=2.0.0
+-e .
+-r web/requirements.txt

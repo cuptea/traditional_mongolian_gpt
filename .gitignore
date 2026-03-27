@@ -47,10 +47,6 @@ htmlcov/
 Thumbs.db
 
 # Project specific
-*.pt
-*.pth
-!assets/**/*.pt
-assets/model/*.pt
 
 # Jupyter Notebook
 .ipynb_checkpoints

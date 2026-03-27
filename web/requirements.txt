@@ -1,3 +1,2 @@
-# For running the web app with autocomplete (web/server.py)
 flask>=2.0.0
 Pillow>=9.0.0

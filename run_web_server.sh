@@ -23,23 +23,32 @@ if [[ -f "$FONT_SRC" && ! -f "$FONT_DST" ]]; then
   cp "$FONT_SRC" "$FONT_DST"
 fi
 
-# Prefer venv if present
+# Prefer project venvs (same as setup_venv.sh / README)
 if [[ -x "$PROJECT_ROOT/.venv/bin/python" ]]; then
   PYTHON="$PROJECT_ROOT/.venv/bin/python"
-  echo "Using venv: $PYTHON"
+  echo "Using: $PYTHON (.venv)"
+elif [[ -x "$PROJECT_ROOT/venv/bin/python" ]]; then
+  PYTHON="$PROJECT_ROOT/venv/bin/python"
+  echo "Using: $PYTHON (venv)"
 else
   PYTHON="$(command -v python3 || command -v python)"
   if [[ -z "$PYTHON" ]]; then
-    echo "Error: python3 or python not found." >&2
+    echo "Error: python3 or python not found. Create .venv: ./setup_venv.sh" >&2
     exit 1
   fi
-  echo "Using: $PYTHON"
+  echo "Using: $PYTHON (system — prefer: python3 -m venv .venv && pip install -r requirements.txt)"
 fi
 
-# Install Flask if missing
-if ! "$PYTHON" -c "import flask" 2>/dev/null; then
-  echo "Installing Flask (web/requirements.txt)..."
+# Web stack (Flask, Pillow for PDF export)
+if ! "$PYTHON" -c "import flask, PIL" 2>/dev/null; then
+  echo "Installing web dependencies (web/requirements.txt)..."
   "$PYTHON" -m pip install -q -r "$PROJECT_ROOT/web/requirements.txt"
+fi
+
+# Autocomplete needs the editable package + torch (see requirements.txt / pyproject.toml)
+if ! "$PYTHON" -c "import torch" 2>/dev/null; then
+  echo "PyTorch not found. From project root run: pip install -r requirements.txt" >&2
+  exit 1
 fi
 
 # Keep NumPy compatible with the installed PyTorch build used by autocomplete.

@@ -20,10 +20,10 @@ Standalone website version of the Jupyter virtual keyboard with **autocomplete**
    ./run_web_server.sh
    ```
 
-   Or manually:
+   Or manually (from project root; autocomplete needs PyTorch via the package):
 
    ```bash
-   pip install -r web/requirements.txt   # once: install Flask
+   pip install -r requirements.txt   # editable package + Flask + Pillow
    python web/server.py
    ```
 
