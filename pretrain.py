@@ -16,11 +16,10 @@ from tokenizers import Tokenizer
 from src.utils import (
     evaluation,
     load_model_state_from_training_checkpoint,
-    load_text_lines,
     sample_text,
     train,
 )
-from src.data.data_loader import DataLoaderLite
+from src.data.data_loader import DataLoaderLite, build_split_token_caches_from_file
 from src.model.gpt import GPT, GPTConfig
 
 
@@ -45,6 +44,7 @@ MAX_LENGTH = 10
 DATA_PATH = Path("./data/data.txt")
 TOKENIZER_PATH = Path("./artifacts/traditional_mongolian_bpe/tokenizer.json")
 DATA_FRACTION = 1
+TRAIN_DATA_PERCENTAGE = 0.9999
 BATCH_SIZE = 64
 NUM_EPOCHS = 5
 CHECKPOINT_PATH = Path("./artifacts/checkpoints/pretrain_latest.pt")
@@ -58,6 +58,12 @@ def build_sample_tokens(prompt: str, tokenizer: Tokenizer, num_return_sequences:
     return tokens
 
 
+def peek_utf8_sample(path: Path, max_chars: int = 400) -> str:
+    """Small disk read for logs — does not load the corpus."""
+    with path.open("r", encoding="utf-8") as f:
+        return f.read(max_chars)
+
+
 def run_validation(model, valid_loader, device, label, step: str) -> float:
     logger.info("%s — running validation (%s)", step, label)
     loss = evaluation(model, valid_loader, device)
@@ -67,42 +73,45 @@ def run_validation(model, valid_loader, device, label, step: str) -> float:
 
 """#1 Prepare data"""
 """## 1.1 Load dataset from google drive"""
-logger.info("[2/9] Loading tokenizer and text — tokenizer=%s, data=%s, fraction=%.4f%%", TOKENIZER_PATH, DATA_PATH, DATA_FRACTION * 100)
+logger.info(
+    "[2/9] Tokenizer + data path — tokenizer=%s, data=%s, fraction=%.4f%%",
+    TOKENIZER_PATH,
+    DATA_PATH,
+    DATA_FRACTION * 100,
+)
 tokenizer = Tokenizer.from_file(str(TOKENIZER_PATH))
-lines = load_text_lines(DATA_PATH, DATA_FRACTION)
-logger.info("[2/9] Loaded %s lines", len(lines))
+logger.info("[2/9] Tokenizer ready — corpus stays on disk until tokenization")
 
-"""## 1.2 Create train and valid datasets"""
-logger.info("[3/9] Splitting train / validation")
-train_data_percentage = 0.9999
-train_line_count = int(len(lines) * train_data_percentage)
-train_lines = lines[:train_line_count]
-valid_lines = lines[train_line_count:]
-train_text = "\n".join(train_lines).strip()
-valid_text = "\n".join(valid_lines).strip()
-train_chars = len(train_text)
-valid_chars = len(valid_text)
-logger.info(
-    "training data: %s lines, %s characters",
-    len(train_lines),
-    train_chars,
+"""## 1.2 Build train / valid token caches from disk (low RAM)"""
+logger.info("[3/9] Streaming train/valid token caches from %s", DATA_PATH)
+logger.info("[3/9] Data file sample (first ~300 chars):\n%s", peek_utf8_sample(DATA_PATH, 300))
+CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+TOKEN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+split_stats = build_split_token_caches_from_file(
+    DATA_PATH,
+    tokenizer,
+    TOKEN_CACHE_DIR / "train_tokens.bin",
+    TOKEN_CACHE_DIR / "valid_tokens.bin",
+    data_fraction=DATA_FRACTION,
+    train_data_percentage=TRAIN_DATA_PERCENTAGE,
+    reuse_token_cache=True,
 )
-logger.info("training data sample:\n%s", train_text[:300])
-logger.info(
-    "validation data: %s lines, %s characters",
-    len(valid_lines),
-    valid_chars,
-)
-logger.info("validation data sample:\n%s", valid_text[:300])
-logger.info("[3/9] Split done — train %s lines, valid %s lines", len(train_lines), len(valid_lines))
+if split_stats is not None:
+    n_kept, train_lines_n, valid_lines_n = split_stats
+    logger.info(
+        "[3/9] Stream done — kept %s lines → train %s, valid %s",
+        n_kept,
+        train_lines_n,
+        valid_lines_n,
+    )
+else:
+    logger.info("[3/9] Using existing token caches (train + valid .bin)")
 
 """# 2 Finetuning a Model on traditional Mongolian text data"""
 """## 2.1 Define the model (GPT2)"""
 """## 2.2 Define data loader"""
 
 """## 2.3 Create model with the custom tokenizer vocabulary"""
-CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
-TOKEN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 logger.info("[4/9] Building model (vocab_size=%s)", tokenizer.get_vocab_size())
 model = GPT(GPTConfig(vocab_size=tokenizer.get_vocab_size()))
 model.to(device)
@@ -117,18 +126,13 @@ else:
 train_loader = DataLoaderLite(
     B=BATCH_SIZE,
     T=64,
-    text=train_text,
-    tokenizer=tokenizer,
     token_cache_path=TOKEN_CACHE_DIR / "train_tokens.bin",
 )
 valid_loader = DataLoaderLite(
     B=BATCH_SIZE,
     T=64,
-    text=valid_text,
-    tokenizer=tokenizer,
     token_cache_path=TOKEN_CACHE_DIR / "valid_tokens.bin",
 )
-del train_text, valid_text
 sample_tokens = build_sample_tokens(SAMPLE_PROMPT, tokenizer, NUM_RETURN_SEQUENCES)
 
 """## 2.4 Evaluation on validation data before fine tuning"""
