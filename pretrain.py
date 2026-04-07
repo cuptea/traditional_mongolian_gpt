@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+import os
+
+# Tokenizers otherwise may use multiprocessing; on macOS that can interact badly with
+# abrupt exits (e.g. OOM kill) and trigger resource_tracker semaphore warnings at shutdown.
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 #   0 Check and install libraries"""
 import logging
@@ -43,6 +48,7 @@ DATA_FRACTION = 1
 BATCH_SIZE = 64
 NUM_EPOCHS = 5
 CHECKPOINT_PATH = Path("./artifacts/checkpoints/pretrain_latest.pt")
+TOKEN_CACHE_DIR = Path("./artifacts/token_cache")
 
 
 def build_sample_tokens(prompt: str, tokenizer: Tokenizer, num_return_sequences: int):
@@ -96,6 +102,7 @@ logger.info("[3/9] Split done — train %s lines, valid %s lines", len(train_lin
 
 """## 2.3 Create model with the custom tokenizer vocabulary"""
 CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+TOKEN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 logger.info("[4/9] Building model (vocab_size=%s)", tokenizer.get_vocab_size())
 model = GPT(GPTConfig(vocab_size=tokenizer.get_vocab_size()))
 model.to(device)
@@ -107,8 +114,21 @@ if CHECKPOINT_PATH.is_file():
 else:
     logger.info("[4/9] No checkpoint at %s — training from random init", CHECKPOINT_PATH)
 
-train_loader = DataLoaderLite(B=BATCH_SIZE, T=64, text=train_text, tokenizer=tokenizer)
-valid_loader = DataLoaderLite(B=BATCH_SIZE, T=64, text=valid_text, tokenizer=tokenizer)
+train_loader = DataLoaderLite(
+    B=BATCH_SIZE,
+    T=64,
+    text=train_text,
+    tokenizer=tokenizer,
+    token_cache_path=TOKEN_CACHE_DIR / "train_tokens.bin",
+)
+valid_loader = DataLoaderLite(
+    B=BATCH_SIZE,
+    T=64,
+    text=valid_text,
+    tokenizer=tokenizer,
+    token_cache_path=TOKEN_CACHE_DIR / "valid_tokens.bin",
+)
+del train_text, valid_text
 sample_tokens = build_sample_tokens(SAMPLE_PROMPT, tokenizer, NUM_RETURN_SEQUENCES)
 
 """## 2.4 Evaluation on validation data before fine tuning"""
