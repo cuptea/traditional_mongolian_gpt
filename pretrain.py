@@ -20,6 +20,7 @@ from src.utils import (
     train,
 )
 from src.data.data_loader import DataLoaderLite, build_split_token_caches_from_file
+from src.data.tokenizer_utils import ensure_bpe_tokenizer_artifacts
 from src.model.gpt import GPT, GPTConfig
 
 
@@ -43,6 +44,7 @@ NUM_RETURN_SEQUENCES = 1
 MAX_LENGTH = 10
 DATA_PATH = Path("./data/data.txt")
 TOKENIZER_PATH = Path("./artifacts/traditional_mongolian_bpe/tokenizer.json")
+TOKENIZER_DIR = TOKENIZER_PATH.parent
 DATA_FRACTION = 1
 TRAIN_DATA_PERCENTAGE = 0.9999
 BATCH_SIZE = 64
@@ -79,7 +81,7 @@ logger.info(
     DATA_PATH,
     DATA_FRACTION * 100,
 )
-tokenizer = Tokenizer.from_file(str(TOKENIZER_PATH))
+tokenizer, tokenizer_rebuilt = ensure_bpe_tokenizer_artifacts(DATA_PATH, TOKENIZER_DIR)
 logger.info("[2/9] Tokenizer ready — corpus stays on disk until tokenization")
 
 """## 1.2 Build train / valid token caches from disk (low RAM)"""
@@ -94,7 +96,7 @@ split_stats = build_split_token_caches_from_file(
     TOKEN_CACHE_DIR / "valid_tokens.bin",
     data_fraction=DATA_FRACTION,
     train_data_percentage=TRAIN_DATA_PERCENTAGE,
-    reuse_token_cache=True,
+    reuse_token_cache=not tokenizer_rebuilt,
 )
 if split_stats is not None:
     n_kept, train_lines_n, valid_lines_n = split_stats
@@ -167,6 +169,5 @@ logger.info(
 )
 logger.info("[7/9] Full train-loss history (all resumed runs): %s", epoch_loss_main)
 logger.info("[7/9] Latest checkpoint: %s", CHECKPOINT_PATH)
-
 
 
