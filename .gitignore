@@ -49,8 +49,8 @@ Thumbs.db
 # Project specific
 *.pt
 *.pth
-!assets/**/*.pt
-assets/model/*.pt
+!assets/model/*.pt
+!assets/model/*.pth
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -60,4 +60,6 @@ assets/model/*.pt
 logs/
 
 # Generated token caches
-artifacts/token_cache/
+artifacts/token_cache/*
+!artifacts/token_cache/
+!artifacts/token_cache/*.bin
