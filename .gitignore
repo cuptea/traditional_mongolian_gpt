@@ -58,3 +58,6 @@ assets/model/*.pt
 
 # Runtime logs
 logs/
+
+# Generated token caches
+artifacts/token_cache/
