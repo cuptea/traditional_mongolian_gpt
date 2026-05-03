@@ -31,6 +31,38 @@ FONT_DIR = PROJECT_ROOT / "assets" / "font"
 KEYBOARD_LAYOUT_PATH = WEB_DIR / "keyboard-layout.json"
 logger = logging.getLogger(__name__)
 
+
+def configure_logging():
+    """Configure root logging for local runs and hosted deployments."""
+    import os
+
+    log_level_name = os.environ.get("LOG_LEVEL", "DEBUG").upper()
+    log_level = getattr(logging, log_level_name, logging.DEBUG)
+    log_dir = Path(os.environ.get("LOG_DIR", PROJECT_ROOT / "logs"))
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / os.environ.get("LOG_FILE", "web_server.log")
+
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    root_logger.handlers.clear()
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    root_logger.addHandler(stream_handler)
+
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=1_000_000,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
+    logger.info("Writing logs to %s", log_file)
+    logger.info("Log level set to %s", log_level_name)
+
 # Lazy-loaded autocomplete model
 _autocomplete_model = None
 
@@ -237,34 +269,9 @@ def project_font(filename):
 
 if __name__ == "__main__":
     import os
-    log_level_name = os.environ.get("LOG_LEVEL", "DEBUG").upper()
-    log_level = getattr(logging, log_level_name, logging.DEBUG)
-    log_dir = Path(os.environ.get("LOG_DIR", PROJECT_ROOT / "logs"))
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / os.environ.get("LOG_FILE", "web_server.log")
 
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-    root_logger.handlers.clear()
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    root_logger.addHandler(stream_handler)
-
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=1_000_000,
-        backupCount=3,
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(formatter)
-    root_logger.addHandler(file_handler)
-
-    logger.info("Writing logs to %s", log_file)
-    logger.info("Log level set to %s", log_level_name)
+    configure_logging()
     # Run from project root so assets/ paths and mongol_ml_autocomplete resolve
     port = int(os.environ.get("PORT", "5001"))
-    app.run(host="127.0.0.1", port=port, debug=False)
+    host = os.environ.get("HOST", "0.0.0.0")
+    app.run(host=host, port=port, debug=False)

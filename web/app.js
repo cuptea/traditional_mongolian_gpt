@@ -237,11 +237,20 @@
   }
 
   function installFontFaces(fonts) {
+    function toCssFontFormat(format) {
+      var normalized = String(format || "").toLowerCase();
+      if (normalized === "ttf") return "truetype";
+      if (normalized === "otf") return "opentype";
+      if (normalized === "woff" || normalized === "woff2") return normalized;
+      return "opentype";
+    }
+
     var css = fonts.map(function (font) {
       var family = sanitizeFontFamily(font.name);
-      var format = font.format === "ttf" ? "truetype" : font.format;
+      var format = toCssFontFormat(font.format);
+      var url = encodeURI(font.url);
       fontFamilyByName[font.name] = family;
-      return "@font-face { font-family: \"" + family + "\"; src: url(\"" + font.url + "\") format(\"" + format + "\"); }";
+      return "@font-face { font-family: \"" + family + "\"; src: url(\"" + url + "\") format(\"" + format + "\"); font-display: swap; }";
     }).join("\n");
     ensureFontStyleElement().textContent = css;
   }
