@@ -103,7 +103,6 @@
   var suggestTimer = null;
   var wordFrequency = Object.create(null);
   var recentWords = [];
-  var defaultSuffixes = ["ᠠ", "ᠡ", "ᠢ", "ᠣ", "ᠤ", "ᠨ", "ᠯ", "ᠳ", "ᠭ"];
   var keyElementsByCode = {};
   var boundaryChars = new Set(
     Object.keys(tokenMap).filter(function (ch) {
@@ -434,20 +433,6 @@
       });
     }
 
-    if (!ranked.length && prefix) {
-      defaultSuffixes.forEach(function (suffix, idx) {
-        if (!suffix || seen[suffix]) return;
-        seen[suffix] = true;
-        ranked.push({ completion: suffix, score: 100 - idx });
-      });
-
-      chars.forEach(function (ch, idx) {
-        if (!ch || isBoundaryChar(ch) || seen[ch]) return;
-        seen[ch] = true;
-        ranked.push({ completion: ch, score: Math.max(1, 50 - idx) });
-      });
-    }
-
     ranked.sort(function (a, b) {
       if (b.score !== a.score) return b.score - a.score;
       return a.completion.localeCompare(b.completion);
@@ -667,9 +652,11 @@
     }
     var suggestions = buildLocalSuggestions(text);
     showSuggestions(suggestions);
-    suggestionsHint.textContent = suggestions.length === 0
-      ? "No suggestions."
-      : "Local browser suggestions";
+    if (suggestions.length === 0) {
+      suggestionsHint.textContent = "No local suggestions yet. Keep typing to train suggestions in this browser.";
+    } else {
+      suggestionsHint.textContent = "Local browser suggestions";
+    }
   }
 
   function scheduleSuggestions(text) {
