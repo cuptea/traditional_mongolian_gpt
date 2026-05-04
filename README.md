@@ -36,6 +36,35 @@ Open the printed URL (default port tries 5001–5003). More detail: [web/README.
 
 You need `assets/model/zmodel.pt` and `assets/token/new_char_to_token.json` for autocomplete.
 
+## Deploy on Render (or similar pods)
+
+This repo now includes a `render.yaml` blueprint for a Render Web Service.
+
+### 1) Prepare required runtime assets
+
+Your service must include:
+
+- `assets/model/zmodel.pt`
+- `assets/token/new_char_to_token.json`
+- fonts in `assets/font/` (already in repo)
+
+If your model file is too large for git, provide it at deploy time (for example via attached disk, startup download script, or private artifact storage).
+
+### 2) Create the service on Render
+
+- Push this repo to GitHub/GitLab.
+- In Render, create a **Blueprint** service from the repo.
+- Render will pick up `render.yaml`:
+  - build: `pip install -r requirements.txt`
+  - start: `gunicorn --chdir web --bind 0.0.0.0:$PORT server:app`
+
+### 3) Environment variables (optional)
+
+- `LOG_LEVEL=INFO` (default in `render.yaml`)
+- `PORT` is provided automatically by Render
+
+The Flask app binds to `0.0.0.0` by default so it works in container/pod environments.
+
 ## Library usage
 
 ```python
