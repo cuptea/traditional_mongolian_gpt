@@ -101,6 +101,8 @@
   var fontStyleEl = null;
   var fontFamilyByName = {};
   var suggestTimer = null;
+  var wordFrequency = Object.create(null);
+  var recentWords = [];
   var keyElementsByCode = {};
   var boundaryChars = new Set(
     Object.keys(tokenMap).filter(function (ch) {
@@ -349,6 +351,101 @@
     return text.replace(repeatedSpace, SPACE_CHAR);
   }
 
+  function loadLocalAutocompleteState() {
+    try {
+      var raw = window.localStorage.getItem("mongolianAutocompleteState") || "";
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.wordFrequency && typeof parsed.wordFrequency === "object") {
+        wordFrequency = parsed.wordFrequency;
+      }
+      if (parsed && Array.isArray(parsed.recentWords)) {
+        recentWords = parsed.recentWords.slice(0, 200);
+      }
+    } catch (e) {}
+  }
+
+  function saveLocalAutocompleteState() {
+    try {
+      window.localStorage.setItem("mongolianAutocompleteState", JSON.stringify({
+        wordFrequency: wordFrequency,
+        recentWords: recentWords.slice(0, 200),
+      }));
+    } catch (e) {}
+  }
+
+  function splitWords(text) {
+    var words = [];
+    var buf = [];
+    Array.from(text || "").forEach(function (ch) {
+      if (isBoundaryChar(ch)) {
+        if (buf.length) {
+          words.push(buf.join(""));
+          buf = [];
+        }
+      } else {
+        buf.push(ch);
+      }
+    });
+    if (buf.length) words.push(buf.join(""));
+    return words;
+  }
+
+  function observeTextForAutocomplete(text) {
+    var words = splitWords(text).filter(function (word) { return word.length > 0; });
+    if (!words.length) return;
+    words.forEach(function (word) {
+      wordFrequency[word] = (wordFrequency[word] || 0) + 1;
+      var existingIndex = recentWords.indexOf(word);
+      if (existingIndex >= 0) recentWords.splice(existingIndex, 1);
+      recentWords.unshift(word);
+    });
+    if (recentWords.length > 200) recentWords.length = 200;
+    saveLocalAutocompleteState();
+  }
+
+  function buildLocalSuggestions(text) {
+    var prefix = extractCurrentWordPrefix(text);
+    var seen = Object.create(null);
+    var ranked = [];
+
+    if (prefix) {
+      Object.keys(wordFrequency).forEach(function (word) {
+        if (word.length <= prefix.length) return;
+        if (word.indexOf(prefix) !== 0) return;
+        var completion = word.slice(prefix.length);
+        if (!completion || seen[completion]) return;
+        seen[completion] = true;
+        ranked.push({
+          completion: completion,
+          score: wordFrequency[word] || 0,
+        });
+      });
+    }
+
+    if (!ranked.length && prefix) {
+      recentWords.forEach(function (word, idx) {
+        if (word.length <= prefix.length || word.indexOf(prefix) !== 0) return;
+        var completion = word.slice(prefix.length);
+        if (!completion || seen[completion]) return;
+        seen[completion] = true;
+        ranked.push({ completion: completion, score: Math.max(1, 200 - idx) });
+      });
+    }
+
+    ranked.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.completion.localeCompare(b.completion);
+    });
+
+    return ranked.slice(0, 9).map(function (item) {
+      return {
+        displayText: prefix + item.completion,
+        nextValue: text + item.completion,
+      };
+    });
+  }
+
   function setValue(s) {
     var normalized = collapseRepeatedSpaces(s || "");
     inputField.value = normalized;
@@ -553,50 +650,13 @@
       suggestionsEl.innerHTML = "";
       return;
     }
-    var context = text;
-    suggestionsHint.textContent = "Loading…";
-    suggestionsEl.innerHTML = "";
-    fetch("/api/suggest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: context }),
-    })
-      .then(function (res) {
-        return res.text().then(function (raw) {
-          var trimmed = raw.trim();
-          if (trimmed.charAt(0) === "<") {
-            throw new Error("Autocomplete API not available. Run the app with the Flask server from the project root: python web/server.py");
-          }
-          var data;
-          try {
-            data = JSON.parse(raw);
-          } catch (e) {
-            throw new Error("Autocomplete API not available. Run the app with: python web/server.py");
-          }
-          if (!res.ok) throw new Error(data.error || "Request failed");
-          return data;
-        });
-      })
-      .then(function (data) {
-        var completions = data.completions || [];
-        var currentWordPrefix = extractCurrentWordPrefix(text);
-        var suggestions = completions.map(function (completion) {
-          return {
-            displayText: currentWordPrefix + completion,
-            nextValue: text + completion,
-          };
-        }).sort(function (a, b) {
-          return a.displayText.localeCompare(b.displayText);
-        });
-        showSuggestions(suggestions);
-        if (suggestions.length === 0) {
-          suggestionsHint.textContent = "No suggestions.";
-        }
-      })
-      .catch(function (err) {
-        suggestionsHint.textContent = "Error: " + (err.message || "Could not get suggestions.");
-        suggestionsEl.innerHTML = "";
-      });
+    var suggestions = buildLocalSuggestions(text);
+    showSuggestions(suggestions);
+    if (suggestions.length === 0) {
+      suggestionsHint.textContent = "No local suggestions yet. Keep typing to train suggestions in this browser.";
+    } else {
+      suggestionsHint.textContent = "Local browser suggestions";
+    }
   }
 
   function scheduleSuggestions(text) {
@@ -615,6 +675,8 @@
     }
     fetchAndShowSuggestions(getValue());
   }
+
+  loadLocalAutocompleteState();
 
   function exportPdf() {
     var text = getValue();
@@ -700,6 +762,10 @@
       exportPdf();
     });
   }
+
+  inputField.addEventListener("blur", function () {
+    observeTextForAutocomplete(getValue());
+  });
 
   if (btnRefreshSuggestions) {
     btnRefreshSuggestions.addEventListener("click", function () {
