@@ -88,6 +88,15 @@
   var inputText = document.getElementById("input-text");
   var inputPlaceholder = document.getElementById("input-placeholder");
   var keyboardEl = document.getElementById("keyboard");
+
+  var richEditor = document.getElementById("rich-editor");
+  var btnToggleKeyboard = document.getElementById("btn-toggle-keyboard");
+  var keyboardSection = document.getElementById("keyboard-section");
+  var appRoot = document.getElementById("app-root");
+  var btnFocusMode = document.getElementById("btn-focus-mode");
+  var saveStatus = document.getElementById("save-status");
+  var plainSource = document.getElementById("plain-source");
+  var pdfFontSize = document.getElementById("pdf-font-size");
   var btnBackspace = document.getElementById("btn-backspace");
   var btnClear = document.getElementById("btn-clear");
   var btnCopy = document.getElementById("btn-copy");
@@ -101,6 +110,8 @@
   var fontStyleEl = null;
   var fontFamilyByName = {};
   var suggestTimer = null;
+  var autosaveTimer = null;
+  var pendingSuggestionIndex = -1;
   var wordFrequency = Object.create(null);
   var recentWords = [];
   var keyElementsByCode = {};
@@ -451,6 +462,8 @@
     inputField.value = normalized;
     updateDisplay(normalized);
     scheduleSuggestions(normalized);
+    if (plainSource && plainSource.value !== normalized) { plainSource.value = normalized; }
+    markDirty();
   }
 
   function updateDisplay(text) {
@@ -592,6 +605,20 @@
     }
 
     if (event.code === "Tab") {
+      if (applySuggestionByIndex(pendingSuggestionIndex)) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    if (event.key === "Escape" && btnFocusMode) {
+      btnFocusMode.click();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      markDirty();
       return;
     }
 
@@ -676,6 +703,108 @@
     fetchAndShowSuggestions(getValue());
   }
 
+
+  function syncEditorFromValue(value) {
+    if (!richEditor) return;
+    richEditor.textContent = value || "";
+  }
+
+  function syncValueFromEditor() {
+    if (!richEditor) return;
+    setValue(richEditor.innerText || "");
+  }
+
+  if (richEditor) {
+    richEditor.addEventListener("input", function () {
+      syncValueFromEditor();
+    });
+  }
+
+  document.querySelectorAll(".editor-cmd").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var cmd = btn.getAttribute("data-cmd");
+      var value = btn.getAttribute("data-value") || null;
+      if (!cmd) return;
+      if (richEditor) {
+        richEditor.focus();
+      }
+      document.execCommand(cmd, false, value);
+      syncValueFromEditor();
+    });
+  });
+
+  if (btnToggleKeyboard && keyboardSection) {
+    btnToggleKeyboard.addEventListener("click", function () {
+      var hidden = keyboardSection.classList.toggle("keyboard-hidden");
+      btnToggleKeyboard.textContent = hidden ? "Show keyboard" : "Hide keyboard";
+      btnToggleKeyboard.setAttribute("aria-expanded", hidden ? "false" : "true");
+    });
+  }
+
+
+  function markSaved(message) {
+    if (!saveStatus) return;
+    saveStatus.textContent = message || "Saved";
+    saveStatus.classList.remove("save-dirty");
+  }
+
+  function markDirty() {
+    if (!saveStatus) return;
+    saveStatus.textContent = "Saving…";
+    saveStatus.classList.add("save-dirty");
+    if (autosaveTimer) {
+      window.clearTimeout(autosaveTimer);
+    }
+    autosaveTimer = window.setTimeout(function () {
+      try {
+        window.localStorage.setItem("mongolianEditorDraft", getValue());
+        markSaved("Saved locally");
+      } catch (e) {
+        markSaved("Save failed");
+      }
+    }, 500);
+  }
+
+  function loadDraft() {
+    try {
+      var draft = window.localStorage.getItem("mongolianEditorDraft") || "";
+      if (draft) {
+        setValue(draft);
+      }
+      markSaved(draft ? "Draft loaded" : "Ready");
+    } catch (e) {
+      markSaved("Ready");
+    }
+  }
+
+  function applySuggestionByIndex(idx) {
+    var buttons = suggestionsEl ? suggestionsEl.querySelectorAll(".btn-suggestion") : [];
+    if (!buttons.length) return false;
+    var useIdx = idx >= 0 ? idx : 0;
+    if (!buttons[useIdx]) return false;
+    buttons[useIdx].click();
+    pendingSuggestionIndex = -1;
+    return true;
+  }
+
+
+  if (plainSource) {
+    plainSource.addEventListener("input", function () {
+      setValue(plainSource.value || "");
+      if (richEditor) {
+        richEditor.textContent = plainSource.value || "";
+      }
+    });
+  }
+
+  if (btnFocusMode && appRoot) {
+    btnFocusMode.addEventListener("click", function () {
+      var enabled = appRoot.classList.toggle("focus-mode");
+      btnFocusMode.setAttribute("aria-pressed", enabled ? "true" : "false");
+      btnFocusMode.textContent = enabled ? "Exit focus" : "Focus mode";
+    });
+  }
+
   loadLocalAutocompleteState();
 
   function exportPdf() {
@@ -694,6 +823,7 @@
       body: JSON.stringify({
         text: text,
         font_name: fontSelect ? fontSelect.value : "",
+        font_size: pdfFontSize ? Number(pdfFontSize.value || 36) : 36,
       }),
     })
       .then(function (res) {
@@ -787,5 +917,7 @@
 
   setupFontSwitcher();
   updateDisplay("");
+  syncEditorFromValue(getValue());
+  loadDraft();
   scheduleSuggestions(getValue());
 })();

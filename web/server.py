@@ -233,6 +233,9 @@ def export_pdf():
         data = request.get_json(force=True, silent=True) or {}
         text = data.get("text") or ""
         font_name = data.get("font_name") or ""
+        font_size = int(data.get("font_size") or 36)
+        if font_size < 16 or font_size > 96:
+            font_size = 36
         if not text:
             return jsonify({"error": "No text to export."}), 400
 
@@ -240,7 +243,7 @@ def export_pdf():
         pdf_bytes = font_utils.create_vertical_text_pdf_bytes(
             text=text,
             font_path=font_path,
-            font_size=36,
+            font_size=font_size,
         )
         if not pdf_bytes:
             logger.error("PDF export failed: renderer returned no output")
