@@ -565,3 +565,56 @@ body {
   padding: 2px 6px;
   border-radius: 4px;
 }
+
+.editor-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.rich-editor {
+  min-height: 220px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.rich-editor:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.2);
+}
+
+.keyboard-section.keyboard-hidden {
+  display: none;
+}
+
+.save-status {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.save-status.save-dirty { color: #e0af68; }
+
+.source-panel { margin-bottom: 10px; }
+.source-textarea {
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.small-select { min-width: 92px; }
+
+.focus-mode .keyboard-section,
+.focus-mode .footer,
+.focus-mode .suggestions-wrap,
+.focus-mode .input-display,
+.focus-mode .source-panel {
+  display: none;
+}
