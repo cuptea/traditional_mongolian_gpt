@@ -12,6 +12,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import sys
+from collections import OrderedDict
+from threading import Lock
 from typing import Optional
 
 # Prefer the local src package so the web app uses current workspace code.
@@ -65,6 +67,29 @@ def configure_logging():
 
 # Lazy-loaded autocomplete model
 _autocomplete_model = None
+_autocomplete_lock = Lock()
+_suggest_cache = OrderedDict()
+_suggest_cache_lock = Lock()
+
+
+def get_cached_suggestions(text: str):
+    with _suggest_cache_lock:
+        value = _suggest_cache.get(text)
+        if value is None:
+            return None
+        _suggest_cache.move_to_end(text)
+        return list(value)
+
+
+def set_cached_suggestions(text: str, completions):
+    import os
+
+    cache_max = int(os.environ.get("AUTOCOMPLETE_CACHE_SIZE", "2000"))
+    with _suggest_cache_lock:
+        _suggest_cache[text] = tuple(completions)
+        _suggest_cache.move_to_end(text)
+        while len(_suggest_cache) > cache_max:
+            _suggest_cache.popitem(last=False)
 
 
 def resolve_font_path(font_name: Optional[str]):
@@ -112,22 +137,25 @@ def validate_keyboard_layout(data):
 def get_autocomplete():
     global _autocomplete_model
     if _autocomplete_model is None:
-        from mongol_ml_autocomplete import MongolMLAutocomplete
-        model_path = PROJECT_ROOT / "assets" / "model" / "zmodel.pt"
-        mapping_path = PROJECT_ROOT / "assets" / "token" / "new_char_to_token.json"
-        if not model_path.exists():
-            raise FileNotFoundError(f"Model not found: {model_path}")
-        if not mapping_path.exists():
-            raise FileNotFoundError(f"Mapping not found: {mapping_path}")
-        _autocomplete_model = MongolMLAutocomplete(
-            path_custom_model=str(model_path),
-            path_mappings=str(mapping_path),
-            block_size=40,
-            verbose=True,
-            logger=logging.getLogger("mongol_ml_autocomplete"),
-        )
-        _autocomplete_model.initialize()
-        logger.info("Autocomplete model initialized")
+        with _autocomplete_lock:
+            if _autocomplete_model is None:
+                from mongol_ml_autocomplete import MongolMLAutocomplete
+
+                model_path = PROJECT_ROOT / "assets" / "model" / "zmodel.pt"
+                mapping_path = PROJECT_ROOT / "assets" / "token" / "new_char_to_token.json"
+                if not model_path.exists():
+                    raise FileNotFoundError(f"Model not found: {model_path}")
+                if not mapping_path.exists():
+                    raise FileNotFoundError(f"Mapping not found: {mapping_path}")
+                _autocomplete_model = MongolMLAutocomplete(
+                    path_custom_model=str(model_path),
+                    path_mappings=str(mapping_path),
+                    block_size=40,
+                    verbose=False,
+                    logger=logging.getLogger("mongol_ml_autocomplete"),
+                )
+                _autocomplete_model.initialize()
+                logger.info("Autocomplete model initialized")
     return _autocomplete_model
 
 
@@ -175,8 +203,13 @@ def suggest():
         if not text:
             logger.info("Suggest request: empty input")
             return jsonify({"completions": []})
+        cached = get_cached_suggestions(text)
+        if cached is not None:
+            return jsonify({"completions": cached})
+
         model = get_autocomplete()
         completions = list(model.run_custom_model(text))
+        set_cached_suggestions(text, completions)
         logger.info(
             "Suggest request: input_length=%d completions=%d",
             len(text),
