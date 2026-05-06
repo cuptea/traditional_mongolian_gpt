@@ -304,10 +304,6 @@ if __name__ == "__main__":
     import os
 
     configure_logging()
-    try:
-        get_autocomplete()
-    except Exception:
-        logger.exception("Autocomplete warmup failed")
     # Run from project root so assets/ paths and mongol_ml_autocomplete resolve
     port = int(os.environ.get("PORT", "5001"))
     host = os.environ.get("HOST", "0.0.0.0")

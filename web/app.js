@@ -101,11 +101,8 @@
   var fontStyleEl = null;
   var fontFamilyByName = {};
   var suggestTimer = null;
-  var suggestCache = new Map();
-  var suggestAbortController = null;
   var wordFrequency = Object.create(null);
   var recentWords = [];
-  var defaultSuffixes = ["ᠠ", "ᠡ", "ᠢ", "ᠣ", "ᠤ", "ᠨ", "ᠯ", "ᠳ", "ᠭ"];
   var keyElementsByCode = {};
   var boundaryChars = new Set(
     Object.keys(tokenMap).filter(function (ch) {
@@ -436,20 +433,6 @@
       });
     }
 
-    if (!ranked.length && prefix) {
-      defaultSuffixes.forEach(function (suffix, idx) {
-        if (!suffix || seen[suffix]) return;
-        seen[suffix] = true;
-        ranked.push({ completion: suffix, score: 100 - idx });
-      });
-
-      chars.forEach(function (ch, idx) {
-        if (!ch || isBoundaryChar(ch) || seen[ch]) return;
-        seen[ch] = true;
-        ranked.push({ completion: ch, score: Math.max(1, 50 - idx) });
-      });
-    }
-
     ranked.sort(function (a, b) {
       if (b.score !== a.score) return b.score - a.score;
       return a.completion.localeCompare(b.completion);
@@ -667,59 +650,13 @@
       suggestionsEl.innerHTML = "";
       return;
     }
-    var cached = suggestCache.get(text);
-    if (cached) {
-      showSuggestions(cached);
-      suggestionsHint.textContent = "Model suggestions";
-      return;
+    var suggestions = buildLocalSuggestions(text);
+    showSuggestions(suggestions);
+    if (suggestions.length === 0) {
+      suggestionsHint.textContent = "No local suggestions yet. Keep typing to train suggestions in this browser.";
+    } else {
+      suggestionsHint.textContent = "Local browser suggestions";
     }
-
-    if (suggestAbortController) {
-      suggestAbortController.abort();
-    }
-    suggestAbortController = new AbortController();
-
-    suggestionsHint.textContent = "Loading model suggestions…";
-    fetch("/api/suggest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text }),
-      signal: suggestAbortController.signal,
-    })
-      .then(function (res) {
-        return res.text().then(function (raw) {
-          var data = {};
-          try {
-            data = JSON.parse(raw || "{}");
-          } catch (e) {
-            throw new Error("Autocomplete API returned non-JSON response.");
-          }
-          if (!res.ok) throw new Error(data.error || "Autocomplete request failed.");
-          return data;
-        });
-      })
-      .then(function (data) {
-        var completions = Array.isArray(data.completions) ? data.completions : [];
-        var prefix = extractCurrentWordPrefix(text);
-        var suggestions = completions.map(function (completion) {
-          return {
-            displayText: prefix + completion,
-            nextValue: text + completion,
-          };
-        });
-        suggestCache.set(text, suggestions);
-        if (suggestCache.size > 200) {
-          var oldestKey = suggestCache.keys().next().value;
-          suggestCache.delete(oldestKey);
-        }
-        showSuggestions(suggestions);
-        suggestionsHint.textContent = suggestions.length ? "Model suggestions" : "No suggestions.";
-      })
-      .catch(function (err) {
-        if (err && err.name === "AbortError") return;
-        suggestionsEl.innerHTML = "";
-        suggestionsHint.textContent = "Error: " + (err.message || "Could not fetch suggestions.");
-      });
   }
 
   function scheduleSuggestions(text) {

@@ -1,6 +1,6 @@
 # Traditional Mongolian Virtual Keyboard (Web)
 
-Standalone website version of the Jupyter virtual keyboard with **API-backed autocomplete**. Input Traditional Mongolian Unicode using the character set from `assets/token/new_char_to_token.json`, rendered with the project font.
+Standalone website version of the Jupyter virtual keyboard with **browser-side autocomplete**. Input Traditional Mongolian Unicode using the character set from `assets/token/new_char_to_token.json`, rendered with the project font.
 
 ## Setup
 
@@ -29,7 +29,7 @@ Standalone website version of the Jupyter virtual keyboard with **API-backed aut
 
    Then open: **http://127.0.0.1:5001/** (or the port printed by the script).
 
-   The Suggest feature uses the server model API endpoint (`/api/suggest`).
+   The Suggest feature runs in the browser and learns from text you type in that browser.
 
 3. **Static-only (no autocomplete)**  
    To serve only the static files (keyboard, no Suggest API):
@@ -41,7 +41,7 @@ Standalone website version of the Jupyter virtual keyboard with **API-backed aut
 
 - **Current input** – Vertical (top-down) preview using the same font and orientation as the notebook completion images.
 - **Text area** – Type or paste; stays in sync with the preview.
-- **Suggest** – Get autocomplete suggestions from the custom model/tokenizer API. Pick one to insert that completion plus a space.
+- **Suggest** – Get autocomplete suggestions locally in the browser from words you’ve typed before. Pick one to insert that completion plus a space.
 - **Character grid** – Click to insert characters (space shown as “␣ space”).
 - **Backspace / Clear / Copy** – Edit and copy the current text.
 
@@ -50,7 +50,7 @@ Standalone website version of the Jupyter virtual keyboard with **API-backed aut
 - `index.html` – Page structure and script/style links.
 - `styles.css` – Layout, theme, font, vertical display, suggestions.
 - `tokens.js` – Character list (from `new_char_to_token.json`, sorted by token ID).
-- `app.js` – Keyboard, API-backed suggestions, suggestion buttons, sync, copy.
+- `app.js` – Keyboard, browser-side suggestions, suggestion buttons, sync, copy.
 - `server.py` – Flask app: serves static files and export/layout APIs.
 - `requirements.txt` – Flask dependency for `server.py`.
 - `assets/font/` – Put `z52chimegtig.otf` here (see Setup).
