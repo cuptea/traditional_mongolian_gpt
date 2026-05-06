@@ -12,6 +12,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import sys
+from collections import OrderedDict
+from threading import Lock
 from typing import Optional
 
 # Prefer the local src package so the web app uses current workspace code.
@@ -31,8 +33,63 @@ FONT_DIR = PROJECT_ROOT / "assets" / "font"
 KEYBOARD_LAYOUT_PATH = WEB_DIR / "keyboard-layout.json"
 logger = logging.getLogger(__name__)
 
+
+def configure_logging():
+    """Configure root logging for local runs and hosted deployments."""
+    import os
+
+    log_level_name = os.environ.get("LOG_LEVEL", "DEBUG").upper()
+    log_level = getattr(logging, log_level_name, logging.DEBUG)
+    log_dir = Path(os.environ.get("LOG_DIR", PROJECT_ROOT / "logs"))
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / os.environ.get("LOG_FILE", "web_server.log")
+
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    root_logger.handlers.clear()
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    root_logger.addHandler(stream_handler)
+
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=1_000_000,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
+    logger.info("Writing logs to %s", log_file)
+    logger.info("Log level set to %s", log_level_name)
+
 # Lazy-loaded autocomplete model
 _autocomplete_model = None
+_autocomplete_lock = Lock()
+_suggest_cache = OrderedDict()
+_suggest_cache_lock = Lock()
+
+
+def get_cached_suggestions(text: str):
+    with _suggest_cache_lock:
+        value = _suggest_cache.get(text)
+        if value is None:
+            return None
+        _suggest_cache.move_to_end(text)
+        return list(value)
+
+
+def set_cached_suggestions(text: str, completions):
+    import os
+
+    cache_max = int(os.environ.get("AUTOCOMPLETE_CACHE_SIZE", "2000"))
+    with _suggest_cache_lock:
+        _suggest_cache[text] = tuple(completions)
+        _suggest_cache.move_to_end(text)
+        while len(_suggest_cache) > cache_max:
+            _suggest_cache.popitem(last=False)
 
 
 def resolve_font_path(font_name: Optional[str]):
@@ -80,22 +137,25 @@ def validate_keyboard_layout(data):
 def get_autocomplete():
     global _autocomplete_model
     if _autocomplete_model is None:
-        from mongol_ml_autocomplete import MongolMLAutocomplete
-        model_path = PROJECT_ROOT / "assets" / "model" / "zmodel.pt"
-        mapping_path = PROJECT_ROOT / "assets" / "token" / "new_char_to_token.json"
-        if not model_path.exists():
-            raise FileNotFoundError(f"Model not found: {model_path}")
-        if not mapping_path.exists():
-            raise FileNotFoundError(f"Mapping not found: {mapping_path}")
-        _autocomplete_model = MongolMLAutocomplete(
-            path_custom_model=str(model_path),
-            path_mappings=str(mapping_path),
-            block_size=40,
-            verbose=True,
-            logger=logging.getLogger("mongol_ml_autocomplete"),
-        )
-        _autocomplete_model.initialize()
-        logger.info("Autocomplete model initialized")
+        with _autocomplete_lock:
+            if _autocomplete_model is None:
+                from mongol_ml_autocomplete import MongolMLAutocomplete
+
+                model_path = PROJECT_ROOT / "assets" / "model" / "zmodel.pt"
+                mapping_path = PROJECT_ROOT / "assets" / "token" / "new_char_to_token.json"
+                if not model_path.exists():
+                    raise FileNotFoundError(f"Model not found: {model_path}")
+                if not mapping_path.exists():
+                    raise FileNotFoundError(f"Mapping not found: {mapping_path}")
+                _autocomplete_model = MongolMLAutocomplete(
+                    path_custom_model=str(model_path),
+                    path_mappings=str(mapping_path),
+                    block_size=40,
+                    verbose=False,
+                    logger=logging.getLogger("mongol_ml_autocomplete"),
+                )
+                _autocomplete_model.initialize()
+                logger.info("Autocomplete model initialized")
     return _autocomplete_model
 
 
@@ -143,8 +203,13 @@ def suggest():
         if not text:
             logger.info("Suggest request: empty input")
             return jsonify({"completions": []})
+        cached = get_cached_suggestions(text)
+        if cached is not None:
+            return jsonify({"completions": cached})
+
         model = get_autocomplete()
         completions = list(model.run_custom_model(text))
+        set_cached_suggestions(text, completions)
         logger.info(
             "Suggest request: input_length=%d completions=%d",
             len(text),
@@ -237,34 +302,13 @@ def project_font(filename):
 
 if __name__ == "__main__":
     import os
-    log_level_name = os.environ.get("LOG_LEVEL", "DEBUG").upper()
-    log_level = getattr(logging, log_level_name, logging.DEBUG)
-    log_dir = Path(os.environ.get("LOG_DIR", PROJECT_ROOT / "logs"))
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / os.environ.get("LOG_FILE", "web_server.log")
 
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-    root_logger.handlers.clear()
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    root_logger.addHandler(stream_handler)
-
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=1_000_000,
-        backupCount=3,
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(formatter)
-    root_logger.addHandler(file_handler)
-
-    logger.info("Writing logs to %s", log_file)
-    logger.info("Log level set to %s", log_level_name)
+    configure_logging()
+    try:
+        get_autocomplete()
+    except Exception:
+        logger.exception("Autocomplete warmup failed")
     # Run from project root so assets/ paths and mongol_ml_autocomplete resolve
     port = int(os.environ.get("PORT", "5001"))
-    app.run(host="127.0.0.1", port=port, debug=False)
+    host = os.environ.get("HOST", "0.0.0.0")
+    app.run(host=host, port=port, debug=False)

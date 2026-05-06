@@ -101,6 +101,11 @@
   var fontStyleEl = null;
   var fontFamilyByName = {};
   var suggestTimer = null;
+  var suggestCache = new Map();
+  var suggestAbortController = null;
+  var wordFrequency = Object.create(null);
+  var recentWords = [];
+  var defaultSuffixes = ["ᠠ", "ᠡ", "ᠢ", "ᠣ", "ᠤ", "ᠨ", "ᠯ", "ᠳ", "ᠭ"];
   var keyElementsByCode = {};
   var boundaryChars = new Set(
     Object.keys(tokenMap).filter(function (ch) {
@@ -237,11 +242,20 @@
   }
 
   function installFontFaces(fonts) {
+    function toCssFontFormat(format) {
+      var normalized = String(format || "").toLowerCase();
+      if (normalized === "ttf") return "truetype";
+      if (normalized === "otf") return "opentype";
+      if (normalized === "woff" || normalized === "woff2") return normalized;
+      return "opentype";
+    }
+
     var css = fonts.map(function (font) {
       var family = sanitizeFontFamily(font.name);
-      var format = font.format === "ttf" ? "truetype" : font.format;
+      var format = toCssFontFormat(font.format);
+      var url = encodeURI(font.url);
       fontFamilyByName[font.name] = family;
-      return "@font-face { font-family: \"" + family + "\"; src: url(\"" + font.url + "\") format(\"" + format + "\"); }";
+      return "@font-face { font-family: \"" + family + "\"; src: url(\"" + url + "\") format(\"" + format + "\"); font-display: swap; }";
     }).join("\n");
     ensureFontStyleElement().textContent = css;
   }
@@ -338,6 +352,115 @@
     var escapedSpace = SPACE_CHAR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     var repeatedSpace = new RegExp(escapedSpace + "{2,}", "g");
     return text.replace(repeatedSpace, SPACE_CHAR);
+  }
+
+  function loadLocalAutocompleteState() {
+    try {
+      var raw = window.localStorage.getItem("mongolianAutocompleteState") || "";
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.wordFrequency && typeof parsed.wordFrequency === "object") {
+        wordFrequency = parsed.wordFrequency;
+      }
+      if (parsed && Array.isArray(parsed.recentWords)) {
+        recentWords = parsed.recentWords.slice(0, 200);
+      }
+    } catch (e) {}
+  }
+
+  function saveLocalAutocompleteState() {
+    try {
+      window.localStorage.setItem("mongolianAutocompleteState", JSON.stringify({
+        wordFrequency: wordFrequency,
+        recentWords: recentWords.slice(0, 200),
+      }));
+    } catch (e) {}
+  }
+
+  function splitWords(text) {
+    var words = [];
+    var buf = [];
+    Array.from(text || "").forEach(function (ch) {
+      if (isBoundaryChar(ch)) {
+        if (buf.length) {
+          words.push(buf.join(""));
+          buf = [];
+        }
+      } else {
+        buf.push(ch);
+      }
+    });
+    if (buf.length) words.push(buf.join(""));
+    return words;
+  }
+
+  function observeTextForAutocomplete(text) {
+    var words = splitWords(text).filter(function (word) { return word.length > 0; });
+    if (!words.length) return;
+    words.forEach(function (word) {
+      wordFrequency[word] = (wordFrequency[word] || 0) + 1;
+      var existingIndex = recentWords.indexOf(word);
+      if (existingIndex >= 0) recentWords.splice(existingIndex, 1);
+      recentWords.unshift(word);
+    });
+    if (recentWords.length > 200) recentWords.length = 200;
+    saveLocalAutocompleteState();
+  }
+
+  function buildLocalSuggestions(text) {
+    var prefix = extractCurrentWordPrefix(text);
+    var seen = Object.create(null);
+    var ranked = [];
+
+    if (prefix) {
+      Object.keys(wordFrequency).forEach(function (word) {
+        if (word.length <= prefix.length) return;
+        if (word.indexOf(prefix) !== 0) return;
+        var completion = word.slice(prefix.length);
+        if (!completion || seen[completion]) return;
+        seen[completion] = true;
+        ranked.push({
+          completion: completion,
+          score: wordFrequency[word] || 0,
+        });
+      });
+    }
+
+    if (!ranked.length && prefix) {
+      recentWords.forEach(function (word, idx) {
+        if (word.length <= prefix.length || word.indexOf(prefix) !== 0) return;
+        var completion = word.slice(prefix.length);
+        if (!completion || seen[completion]) return;
+        seen[completion] = true;
+        ranked.push({ completion: completion, score: Math.max(1, 200 - idx) });
+      });
+    }
+
+    if (!ranked.length && prefix) {
+      defaultSuffixes.forEach(function (suffix, idx) {
+        if (!suffix || seen[suffix]) return;
+        seen[suffix] = true;
+        ranked.push({ completion: suffix, score: 100 - idx });
+      });
+
+      chars.forEach(function (ch, idx) {
+        if (!ch || isBoundaryChar(ch) || seen[ch]) return;
+        seen[ch] = true;
+        ranked.push({ completion: ch, score: Math.max(1, 50 - idx) });
+      });
+    }
+
+    ranked.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.completion.localeCompare(b.completion);
+    });
+
+    return ranked.slice(0, 9).map(function (item) {
+      return {
+        displayText: prefix + item.completion,
+        nextValue: text + item.completion,
+      };
+    });
   }
 
   function setValue(s) {
@@ -544,49 +667,58 @@
       suggestionsEl.innerHTML = "";
       return;
     }
-    var context = text;
-    suggestionsHint.textContent = "Loading…";
-    suggestionsEl.innerHTML = "";
+    var cached = suggestCache.get(text);
+    if (cached) {
+      showSuggestions(cached);
+      suggestionsHint.textContent = "Model suggestions";
+      return;
+    }
+
+    if (suggestAbortController) {
+      suggestAbortController.abort();
+    }
+    suggestAbortController = new AbortController();
+
+    suggestionsHint.textContent = "Loading model suggestions…";
     fetch("/api/suggest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: context }),
+      body: JSON.stringify({ text: text }),
+      signal: suggestAbortController.signal,
     })
       .then(function (res) {
         return res.text().then(function (raw) {
-          var trimmed = raw.trim();
-          if (trimmed.charAt(0) === "<") {
-            throw new Error("Autocomplete API not available. Run the app with the Flask server from the project root: python web/server.py");
-          }
-          var data;
+          var data = {};
           try {
-            data = JSON.parse(raw);
+            data = JSON.parse(raw || "{}");
           } catch (e) {
-            throw new Error("Autocomplete API not available. Run the app with: python web/server.py");
+            throw new Error("Autocomplete API returned non-JSON response.");
           }
-          if (!res.ok) throw new Error(data.error || "Request failed");
+          if (!res.ok) throw new Error(data.error || "Autocomplete request failed.");
           return data;
         });
       })
       .then(function (data) {
-        var completions = data.completions || [];
-        var currentWordPrefix = extractCurrentWordPrefix(text);
+        var completions = Array.isArray(data.completions) ? data.completions : [];
+        var prefix = extractCurrentWordPrefix(text);
         var suggestions = completions.map(function (completion) {
           return {
-            displayText: currentWordPrefix + completion,
+            displayText: prefix + completion,
             nextValue: text + completion,
           };
-        }).sort(function (a, b) {
-          return a.displayText.localeCompare(b.displayText);
         });
-        showSuggestions(suggestions);
-        if (suggestions.length === 0) {
-          suggestionsHint.textContent = "No suggestions.";
+        suggestCache.set(text, suggestions);
+        if (suggestCache.size > 200) {
+          var oldestKey = suggestCache.keys().next().value;
+          suggestCache.delete(oldestKey);
         }
+        showSuggestions(suggestions);
+        suggestionsHint.textContent = suggestions.length ? "Model suggestions" : "No suggestions.";
       })
       .catch(function (err) {
-        suggestionsHint.textContent = "Error: " + (err.message || "Could not get suggestions.");
+        if (err && err.name === "AbortError") return;
         suggestionsEl.innerHTML = "";
+        suggestionsHint.textContent = "Error: " + (err.message || "Could not fetch suggestions.");
       });
   }
 
@@ -606,6 +738,8 @@
     }
     fetchAndShowSuggestions(getValue());
   }
+
+  loadLocalAutocompleteState();
 
   function exportPdf() {
     var text = getValue();
@@ -691,6 +825,10 @@
       exportPdf();
     });
   }
+
+  inputField.addEventListener("blur", function () {
+    observeTextForAutocomplete(getValue());
+  });
 
   if (btnRefreshSuggestions) {
     btnRefreshSuggestions.addEventListener("click", function () {
