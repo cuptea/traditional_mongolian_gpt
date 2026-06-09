@@ -1,20 +1,28 @@
 """
-Local server for the Traditional Mongolian Virtual Keyboard web app.
-Serves static files and provides /api/suggest for autocomplete.
+Gradio/FastAPI backend for the Traditional Mongolian Virtual Keyboard web app.
+
+The module exposes two entry points:
+  * app  - ASGI app for uvicorn/Render/Hugging Face Docker-style hosting.
+  * demo - Gradio Blocks app for Hugging Face Gradio Spaces.
 
 Run from the project root:
   python web/server.py
 
-Then open http://127.0.0.1:5000/
+Then open http://127.0.0.1:5001/ for the existing keyboard UI or
+http://127.0.0.1:5001/gradio for the Gradio interface.
 """
+from __future__ import annotations
+
 import json
 import logging
+import os
+import tempfile
+from collections import OrderedDict
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import sys
-from collections import OrderedDict
 from threading import Lock
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 # Prefer the local src package so the web app uses current workspace code.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -24,20 +32,38 @@ if str(SRC_ROOT) not in sys.path:
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(1, str(PROJECT_ROOT))
 
-from flask import Flask, request, jsonify, send_from_directory, send_file
+import gradio as gr
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
 from mongol_ml_autocomplete import font_utils
 
-app = Flask(__name__)
 WEB_DIR = Path(__file__).resolve().parent
 FONT_DIR = PROJECT_ROOT / "assets" / "font"
 KEYBOARD_LAYOUT_PATH = WEB_DIR / "keyboard-layout.json"
 logger = logging.getLogger(__name__)
 
+# Lazy-loaded autocomplete model and bounded suggestion cache.
+_autocomplete_model = None
+_autocomplete_lock = Lock()
+_suggest_cache: OrderedDict[str, tuple[str, ...]] = OrderedDict()
+_suggest_cache_lock = Lock()
 
-def configure_logging():
+
+class SuggestRequest(BaseModel):
+    text: str = ""
+
+
+class ExportPdfRequest(BaseModel):
+    text: str = ""
+    font_name: str = ""
+    font_size: int = 36
+
+
+def configure_logging() -> None:
     """Configure root logging for local runs and hosted deployments."""
-    import os
-
     log_level_name = os.environ.get("LOG_LEVEL", "DEBUG").upper()
     log_level = getattr(logging, log_level_name, logging.DEBUG)
     log_dir = Path(os.environ.get("LOG_DIR", PROJECT_ROOT / "logs"))
@@ -65,14 +91,8 @@ def configure_logging():
     logger.info("Writing logs to %s", log_file)
     logger.info("Log level set to %s", log_level_name)
 
-# Lazy-loaded autocomplete model
-_autocomplete_model = None
-_autocomplete_lock = Lock()
-_suggest_cache = OrderedDict()
-_suggest_cache_lock = Lock()
 
-
-def get_cached_suggestions(text: str):
+def get_cached_suggestions(text: str) -> Optional[List[str]]:
     with _suggest_cache_lock:
         value = _suggest_cache.get(text)
         if value is None:
@@ -81,9 +101,7 @@ def get_cached_suggestions(text: str):
         return list(value)
 
 
-def set_cached_suggestions(text: str, completions):
-    import os
-
+def set_cached_suggestions(text: str, completions: List[str]) -> None:
     cache_max = int(os.environ.get("AUTOCOMPLETE_CACHE_SIZE", "2000"))
     with _suggest_cache_lock:
         _suggest_cache[text] = tuple(completions)
@@ -92,10 +110,10 @@ def set_cached_suggestions(text: str, completions):
             _suggest_cache.popitem(last=False)
 
 
-def resolve_font_path(font_name: Optional[str]):
+def resolve_font_path(font_name: Optional[str]) -> Path:
     """Resolve a requested project font name to a local path."""
     if not font_name:
-        return font_utils.get_font_path(PROJECT_ROOT)
+        return Path(font_utils.get_font_path(PROJECT_ROOT))
 
     candidate = FONT_DIR / Path(font_name).name
     if (
@@ -105,16 +123,16 @@ def resolve_font_path(font_name: Optional[str]):
         and candidate.stem.lower().startswith("z52")
     ):
         return candidate
-    return font_utils.get_font_path(PROJECT_ROOT)
+    return Path(font_utils.get_font_path(PROJECT_ROOT))
 
 
-def load_keyboard_layout():
+def load_keyboard_layout() -> Dict[str, Any]:
     """Load the editable keyboard layout JSON from disk."""
     with KEYBOARD_LAYOUT_PATH.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def validate_keyboard_layout(data):
+def validate_keyboard_layout(data: Any) -> Dict[str, Any]:
     """Perform lightweight validation for the keyboard layout payload."""
     if not isinstance(data, dict):
         raise ValueError("Keyboard layout must be a JSON object.")
@@ -159,155 +177,217 @@ def get_autocomplete():
     return _autocomplete_model
 
 
-@app.route("/")
-def index():
-    return send_from_directory(WEB_DIR, "index.html")
-
-
-@app.route("/api/fonts", methods=["GET"])
-def list_fonts():
-    """Return available font files from the project assets/font directory."""
+def list_project_fonts() -> List[Dict[str, str]]:
+    """Return available Traditional Mongolian font files."""
     if not FONT_DIR.exists():
         logger.warning("Font directory not found: %s", FONT_DIR)
-        return jsonify({"fonts": []})
+        return []
 
-    fonts = []
+    fonts: List[Dict[str, str]] = []
     for path in sorted(FONT_DIR.iterdir()):
         if not path.is_file() or path.suffix.lower() not in {".otf", ".ttf", ".woff", ".woff2"}:
             continue
-
-        # Only expose the Mongolian font family intended for the keyboard UI.
-        # The folder also contains generic UI fonts (e.g. Segoe UI) that do not
-        # render the Traditional Mongolian keyboard consistently.
         if not path.stem.lower().startswith("z52"):
             continue
+        fonts.append(
+            {
+                "name": path.name,
+                "label": path.stem,
+                "url": f"/project-assets/font/{path.name}",
+                "format": path.suffix.lower().lstrip("."),
+            }
+        )
+    return fonts
 
-        if path.is_file():
-            fonts.append(
-                {
-                    "name": path.name,
-                    "label": path.stem,
-                    "url": f"/project-assets/font/{path.name}",
-                    "format": path.suffix.lower().lstrip("."),
-                }
+
+def suggest_text(text: str) -> List[str]:
+    """Return model-backed autocomplete suggestions for API and Gradio callers."""
+    if not text:
+        logger.info("Suggest request: empty input")
+        return []
+
+    cached = get_cached_suggestions(text)
+    if cached is not None:
+        return cached
+
+    model = get_autocomplete()
+    completions = list(model.run_custom_model(text))
+    set_cached_suggestions(text, completions)
+    logger.info("Suggest request: input_length=%d completions=%d", len(text), len(completions))
+    return completions
+
+
+def create_pdf_bytes(text: str, font_name: str = "", font_size: int = 36) -> bytes:
+    """Render text to vertical Traditional Mongolian PDF bytes."""
+    if font_size < 16 or font_size > 96:
+        font_size = 36
+    if not text:
+        raise ValueError("No text to export.")
+
+    font_path = resolve_font_path(font_name)
+    pdf_bytes = font_utils.create_vertical_text_pdf_bytes(
+        text=text,
+        font_path=font_path,
+        font_size=font_size,
+    )
+    if not pdf_bytes:
+        raise RuntimeError("Could not generate PDF.")
+
+    logger.info("PDF export: input_length=%d font=%s", len(text), Path(font_path).name)
+    return pdf_bytes
+
+
+def gradio_suggest(text: str) -> str:
+    """Format suggestions for the Gradio UI."""
+    try:
+        completions = suggest_text(text or "")
+    except Exception as exc:
+        logger.exception("Gradio suggest failed")
+        return f"Error: {exc}"
+    if not completions:
+        return "No suggestions."
+    return "\n".join(f"{index + 1}. {completion}" for index, completion in enumerate(completions))
+
+
+def gradio_export_pdf(text: str, font_name: str, font_size: int) -> str:
+    """Create a temporary PDF file for Gradio's file download component."""
+    pdf_bytes = create_pdf_bytes(text or "", font_name or "", int(font_size or 36))
+    handle = tempfile.NamedTemporaryFile(
+        mode="wb",
+        suffix=".pdf",
+        prefix="mongolian-text-",
+        delete=False,
+    )
+    with handle:
+        handle.write(pdf_bytes)
+    return handle.name
+
+
+def create_demo() -> gr.Blocks:
+    """Create the Hugging Face Gradio interface."""
+    font_choices = [font["name"] for font in list_project_fonts()]
+    default_font = "z52chimegtig.otf" if "z52chimegtig.otf" in font_choices else (font_choices[0] if font_choices else "")
+
+    with gr.Blocks(title="Traditional Mongolian GPT") as demo:
+        gr.Markdown(
+            "# Traditional Mongolian GPT\n"
+            "Use the autocomplete model from a Hugging Face Gradio server. "
+            "The full keyboard/editor remains available at `/`."
+        )
+        with gr.Row():
+            text = gr.Textbox(
+                label="Traditional Mongolian text",
+                lines=8,
+                placeholder="Type or paste Traditional Mongolian text…",
             )
-    return jsonify({"fonts": fonts})
+            suggestions = gr.Textbox(label="Suggestions", lines=8, interactive=False)
+        with gr.Row():
+            suggest_button = gr.Button("Suggest", variant="primary")
+            font_name = gr.Dropdown(
+                choices=font_choices,
+                value=default_font,
+                label="PDF font",
+                interactive=bool(font_choices),
+            )
+            font_size = gr.Slider(16, 96, value=36, step=1, label="PDF font size")
+        with gr.Row():
+            export_button = gr.Button("Export PDF")
+            pdf_file = gr.File(label="Generated PDF")
+
+        suggest_button.click(gradio_suggest, inputs=text, outputs=suggestions)
+        text.submit(gradio_suggest, inputs=text, outputs=suggestions)
+        export_button.click(gradio_export_pdf, inputs=[text, font_name, font_size], outputs=pdf_file)
+
+    return demo
 
 
-@app.route("/api/suggest", methods=["POST"])
-def suggest():
-    """Accept JSON { \"text\": \"...\" }, return { \"completions\": [\"...\", ...] }."""
-    try:
-        data = request.get_json(force=True, silent=True) or {}
-        text = data.get("text") or ""
-        if not text:
-            logger.info("Suggest request: empty input")
-            return jsonify({"completions": []})
-        cached = get_cached_suggestions(text)
-        if cached is not None:
-            return jsonify({"completions": cached})
+def create_app() -> FastAPI:
+    """Create the ASGI app with Gradio mounted as the backend UI."""
+    api = FastAPI(title="Traditional Mongolian GPT")
 
-        model = get_autocomplete()
-        completions = list(model.run_custom_model(text))
-        set_cached_suggestions(text, completions)
-        logger.info(
-            "Suggest request: input_length=%d completions=%d",
-            len(text),
-            len(completions),
-        )
-        return jsonify({"completions": completions})
-    except FileNotFoundError as e:
-        logger.exception("Suggest request failed: missing required file")
-        return jsonify({"error": str(e), "completions": []}), 503
-    except Exception as e:
-        logger.exception("Suggest request failed")
-        return jsonify({"error": str(e), "completions": []}), 500
+    @api.get("/", include_in_schema=False)
+    async def index():
+        return FileResponse(WEB_DIR / "index.html")
 
+    @api.get("/api/fonts")
+    async def fonts():
+        return {"fonts": list_project_fonts()}
 
-@app.route("/api/export/pdf", methods=["POST"])
-def export_pdf():
-    """Accept JSON { "text": "...", "font_name": "..." } and return a PDF file."""
-    try:
-        from io import BytesIO
+    @api.post("/api/suggest")
+    async def suggest(payload: SuggestRequest):
+        try:
+            return {"completions": suggest_text(payload.text or "")}
+        except FileNotFoundError as exc:
+            logger.exception("Suggest request failed: missing required file")
+            return JSONResponse({"error": str(exc), "completions": []}, status_code=503)
+        except Exception as exc:
+            logger.exception("Suggest request failed")
+            return JSONResponse({"error": str(exc), "completions": []}, status_code=500)
 
-        data = request.get_json(force=True, silent=True) or {}
-        text = data.get("text") or ""
-        font_name = data.get("font_name") or ""
-        font_size = int(data.get("font_size") or 36)
-        if font_size < 16 or font_size > 96:
-            font_size = 36
-        if not text:
-            return jsonify({"error": "No text to export."}), 400
+    @api.post("/api/export/pdf")
+    async def export_pdf(payload: ExportPdfRequest):
+        try:
+            pdf_bytes = create_pdf_bytes(payload.text or "", payload.font_name or "", payload.font_size)
+            headers = {"Content-Disposition": 'attachment; filename="mongolian-text.pdf"'}
+            return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        except Exception as exc:
+            logger.exception("PDF export failed")
+            return JSONResponse({"error": str(exc)}, status_code=500)
 
-        font_path = resolve_font_path(font_name)
-        pdf_bytes = font_utils.create_vertical_text_pdf_bytes(
-            text=text,
-            font_path=font_path,
-            font_size=font_size,
-        )
-        if not pdf_bytes:
-            logger.error("PDF export failed: renderer returned no output")
-            return jsonify({"error": "Could not generate PDF."}), 500
+    @api.get("/api/keyboard-layout")
+    async def get_keyboard_layout():
+        try:
+            return load_keyboard_layout()
+        except FileNotFoundError as exc:
+            logger.exception("Keyboard layout file not found: %s", KEYBOARD_LAYOUT_PATH)
+            raise HTTPException(status_code=404, detail="Keyboard layout file not found.") from exc
 
-        logger.info(
-            "PDF export: input_length=%d font=%s",
-            len(text),
-            Path(font_path).name if font_path else "default",
-        )
-        return send_file(
-            BytesIO(pdf_bytes),
-            mimetype="application/pdf",
-            as_attachment=True,
-            download_name="mongolian-text.pdf",
-        )
-    except Exception as e:
-        logger.exception("PDF export failed")
-        return jsonify({"error": str(e)}), 500
+    @api.post("/api/keyboard-layout")
+    async def save_keyboard_layout(request: Request):
+        try:
+            data = await request.json()
+            layout = validate_keyboard_layout(data)
+            KEYBOARD_LAYOUT_PATH.write_text(
+                json.dumps(layout, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            logger.info("Keyboard layout saved: rows=%d", len(layout.get("rows", [])))
+            return {"ok": True}
+        except json.JSONDecodeError:
+            return JSONResponse({"error": "Expected JSON body."}, status_code=400)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        except Exception as exc:
+            logger.exception("Keyboard layout API failed")
+            return JSONResponse({"error": str(exc)}, status_code=500)
 
+    api.mount("/project-assets/font", StaticFiles(directory=FONT_DIR), name="project_fonts")
+    mounted_app = gr.mount_gradio_app(api, demo, path="/gradio")
 
-@app.route("/api/keyboard-layout", methods=["GET", "POST"])
-def keyboard_layout():
-    """Load or save the editable keyboard layout JSON."""
-    try:
-        if request.method == "GET":
-            return jsonify(load_keyboard_layout())
+    @mounted_app.get("/{static_path:path}", include_in_schema=False)
+    async def static_web_file(static_path: str):
+        requested = (WEB_DIR / static_path).resolve()
+        try:
+            requested.relative_to(WEB_DIR)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="File not found.") from exc
+        if requested.is_file():
+            return FileResponse(requested)
+        raise HTTPException(status_code=404, detail="File not found.")
 
-        data = request.get_json(force=True, silent=True)
-        if data is None:
-            return jsonify({"error": "Expected JSON body."}), 400
-
-        layout = validate_keyboard_layout(data)
-        KEYBOARD_LAYOUT_PATH.write_text(
-            json.dumps(layout, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        logger.info("Keyboard layout saved: rows=%d", len(layout.get("rows", [])))
-        return jsonify({"ok": True})
-    except FileNotFoundError:
-        logger.exception("Keyboard layout file not found: %s", KEYBOARD_LAYOUT_PATH)
-        return jsonify({"error": "Keyboard layout file not found."}), 404
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        logger.exception("Keyboard layout API failed")
-        return jsonify({"error": str(e)}), 500
+    return mounted_app
 
 
-@app.route("/<path:path>")
-def static_file(path):
-    return send_from_directory(WEB_DIR, path)
-
-
-@app.route("/project-assets/font/<path:filename>")
-def project_font(filename):
-    return send_from_directory(FONT_DIR, filename)
+configure_logging()
+demo = create_demo()
+app = create_app()
 
 
 if __name__ == "__main__":
-    import os
+    import uvicorn
 
-    configure_logging()
-    # Run from project root so assets/ paths and mongol_ml_autocomplete resolve
     port = int(os.environ.get("PORT", "5001"))
     host = os.environ.get("HOST", "0.0.0.0")
-    app.run(host=host, port=port, debug=False)
+    uvicorn.run(app, host=host, port=port)

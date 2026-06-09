@@ -1,6 +1,6 @@
 # Traditional Mongolian Virtual Keyboard (Web)
 
-Standalone website version of the Jupyter virtual keyboard with **browser-side autocomplete**. Input Traditional Mongolian Unicode using the character set from `assets/token/new_char_to_token.json`, rendered with the project font.
+Standalone website version of the Jupyter virtual keyboard with a **Gradio/FastAPI backend**. Input Traditional Mongolian Unicode using the character set from `assets/token/new_char_to_token.json`, rendered with the project font.
 
 ## Setup
 
@@ -14,7 +14,7 @@ Standalone website version of the Jupyter virtual keyboard with **browser-side a
    If the font file has a different name, copy it to `web/assets/font/z52chimegtig.otf` (or update the `@font-face` `url()` in `web/styles.css` to match the filename).
 
 2. **Run the app** (recommended)  
-   From the **project root**, run the Flask server (serves the site and export APIs):
+   From the **project root**, run the Gradio/FastAPI server (serves the site, autocomplete, export APIs, and `/gradio`):
 
    ```bash
    ./run_web_server.sh
@@ -23,25 +23,31 @@ Standalone website version of the Jupyter virtual keyboard with **browser-side a
    Or manually (from project root):
 
    ```bash
-   pip install -r requirements.txt   # editable package + Flask + Pillow
+   pip install -r requirements.txt   # editable package + Gradio/FastAPI + Pillow
    python web/server.py
    ```
 
-   Then open: **http://127.0.0.1:5001/** (or the port printed by the script).
+   Then open: **http://127.0.0.1:5001/** for the keyboard (or the port printed by the script), or **http://127.0.0.1:5001/gradio** for the Hugging Face Gradio interface.
 
-   The Suggest feature runs in the browser and learns from text you type in that browser.
+   The Suggest feature calls the backend model through `/api/suggest`; the Gradio UI uses the same backend function.
 
-3. **Static-only (no autocomplete)**  
+3. **Static-only (no backend autocomplete/PDF)**  
    To serve only the static files (keyboard, no Suggest API):
 
    From the project root: `python -m http.server 8000` → **http://localhost:8000/web/**  
    Or from `web`: `python -m http.server 8080` → **http://localhost:8080/**
 
+
+## Hugging Face / Gradio
+
+- `app.py` at the repository root is the Gradio Spaces entry point and launches the `demo` from `web/server.py`.
+- `web/server.py` also exports an ASGI `app` for Uvicorn-compatible hosts. In that mode, `/` serves the existing keyboard/editor, `/api/*` serves the frontend APIs, and `/gradio` serves the Gradio UI.
+
 ## Features
 
 - **Current input** – Vertical (top-down) preview using the same font and orientation as the notebook completion images.
 - **Text area** – Type or paste; stays in sync with the preview.
-- **Suggest** – Get autocomplete suggestions locally in the browser from words you’ve typed before. Pick one to insert that completion plus a space.
+- **Suggest** – Get autocomplete suggestions from the Gradio/FastAPI backend model. Pick one to insert that completion plus a space.
 - **Character grid** – Click to insert characters (space shown as “␣ space”).
 - **Backspace / Clear / Copy** – Edit and copy the current text.
 
@@ -50,7 +56,7 @@ Standalone website version of the Jupyter virtual keyboard with **browser-side a
 - `index.html` – Page structure and script/style links.
 - `styles.css` – Layout, theme, font, vertical display, suggestions.
 - `tokens.js` – Character list (from `new_char_to_token.json`, sorted by token ID).
-- `app.js` – Keyboard, browser-side suggestions, suggestion buttons, sync, copy.
-- `server.py` – Flask app: serves static files and export/layout APIs.
-- `requirements.txt` – Flask dependency for `server.py`.
+- `app.js` – Keyboard, backend suggestions, suggestion buttons, sync, copy.
+- `server.py` – Gradio/FastAPI app: serves static files, autocomplete, export/layout APIs, and the `/gradio` UI.
+- `requirements.txt` – Gradio/FastAPI dependencies for `server.py`.
 - `assets/font/` – Put `z52chimegtig.otf` here (see Setup).
