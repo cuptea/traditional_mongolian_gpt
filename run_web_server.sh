@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the Traditional Mongolian Virtual Keyboard web app with autocomplete API.
+# Run the Traditional Mongolian Virtual Keyboard web app with a Gradio/FastAPI backend.
 # Usage: ./run_web_server.sh   (from project root)
 
 set -e
@@ -39,8 +39,8 @@ else
   echo "Using: $PYTHON (system — prefer: python3 -m venv .venv && pip install -r requirements.txt)"
 fi
 
-# Web stack (Flask, Pillow for PDF export)
-if ! "$PYTHON" -c "import flask, PIL" 2>/dev/null; then
+# Web stack (Gradio/FastAPI, Uvicorn, Pillow for PDF export)
+if ! "$PYTHON" -c "import gradio, fastapi, uvicorn, PIL" 2>/dev/null; then
   echo "Installing web dependencies (web/requirements.txt)..."
   "$PYTHON" -m pip install -q -r "$PROJECT_ROOT/web/requirements.txt"
 fi

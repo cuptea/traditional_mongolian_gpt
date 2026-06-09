@@ -1,13 +1,13 @@
 # Mongol ML Autocomplete
 
-Traditional Mongolian text autocompletion using a local **TorchScript** model, plus a small **Flask** web keyboard (suggestions, PDF export). The installable package is `mongol_ml_autocomplete` under `src/`.
+Traditional Mongolian text autocompletion using a local **TorchScript** model, plus a **Gradio/FastAPI** web keyboard backend (suggestions, PDF export). The installable package is `mongol_ml_autocomplete` under `src/`.
 
 ## What’s in the repo
 
 | Part | Role |
 |------|------|
 | `src/mongol_ml_autocomplete/` | `MongolMLAutocomplete`, `font_utils` |
-| `web/` | Static UI + `server.py` (`/api/suggest`, fonts, keyboard layout) |
+| `web/` | Static UI + Gradio/FastAPI `server.py` (`/api/suggest`, fonts, keyboard layout, PDF export) |
 | `assets/` | Fonts, `token/new_char_to_token.json`, and **your** `model/zmodel.pt` (not shipped in git) |
 
 ## Install
@@ -22,9 +22,9 @@ If `python3` is **3.14+**, `setup_venv.sh` automatically uses **python3.13**, **
 
 Or manually: `python3 -m venv .venv`, activate, then `pip install -r requirements.txt`.
 
-That installs the package in editable mode (`-e .`), **PyTorch** + **NumPy**, and **Flask** + **Pillow** for the web app. Optional tests tooling: `pip install -e ".[dev]"`.
+That installs the package in editable mode (`-e .`), **PyTorch** + **NumPy**, and **Gradio/FastAPI** + **Pillow** for the web app. Optional tests tooling: `pip install -e ".[dev]"`.
 
-**Python** ≥ 3.7.
+**Python** ≥ 3.8 for the Gradio/FastAPI web backend.
 
 ## Web app
 
@@ -32,7 +32,7 @@ That installs the package in editable mode (`-e .`), **PyTorch** + **NumPy**, an
 ./run_web_server.sh
 ```
 
-Open the printed URL (default port tries 5001–5003). More detail: [web/README.md](web/README.md).
+Open the printed URL (default port tries 5001–5003) for the keyboard/editor, or visit `/gradio` for the Hugging Face Gradio interface. More detail: [web/README.md](web/README.md).
 
 You need `assets/model/zmodel.pt` and `assets/token/new_char_to_token.json` for autocomplete.
 
@@ -56,14 +56,19 @@ If your model file is too large for git, provide it at deploy time (for example 
 - In Render, create a **Blueprint** service from the repo.
 - Render will pick up `render.yaml`:
   - build: `pip install -r requirements.txt`
-  - start: `gunicorn --chdir web --bind 0.0.0.0:$PORT server:app`
+  - start: `uvicorn web.server:app --host 0.0.0.0 --port $PORT`
 
 ### 3) Environment variables (optional)
 
 - `LOG_LEVEL=INFO` (default in `render.yaml`)
 - `PORT` is provided automatically by Render
 
-The Flask app binds to `0.0.0.0` by default so it works in container/pod environments.
+The Gradio/FastAPI app binds to `0.0.0.0` by default so it works in container/pod environments.
+
+
+## Hugging Face Gradio
+
+This branch can run as a Hugging Face Gradio Space through the root `app.py`, which exposes a lightweight Gradio interface backed by the same autocomplete/PDF functions. For ASGI hosts that need the full keyboard/editor plus JSON APIs, run `uvicorn web.server:app --host 0.0.0.0 --port $PORT`; the static keyboard remains at `/` and the Gradio interface is mounted at `/gradio`.
 
 ## Library usage
 
